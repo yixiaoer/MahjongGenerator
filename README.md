@@ -17,6 +17,7 @@ git clone https://github.com/yixiaoer/MahjongGenerator.git
 cd MahjongGenerator
 python3.12 -m venv venv
 . venv/bin/activate
+pip install mypy
 ```
 
 ## Basic Rules and Customized Options
@@ -31,9 +32,11 @@ To better represent the various rules in Mahjong Generator, we represent the rul
 
 - [ ] Basic Rules
     - [x] Draw tiles and discard tiles
-    - [x] Hu, Kong, Pong, and Chow
+    - [x] Hu, Kong, Pong, and Chow from discard
+    - [x] Hu, Kong and Chow from wall
     - [ ] Joker
     - [ ] Special legal hands
+    - [ ] Calculate score
 
 - [ ] Customized Options
     - [x] Choice of tile types
@@ -100,7 +103,3 @@ To better represent the various rules in Mahjong Generator, we represent the rul
 * Ready hand: 听(also 听牌, 叫糊), the hand is one tile short of winning
 
 ## Some special legal hands
-
-
-
-
