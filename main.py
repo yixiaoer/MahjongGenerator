@@ -2,8 +2,8 @@ from game import MahjongGame
 from option_config import setup_game
 
 def main():
-    tile_types = setup_game()
-    game = MahjongGame(tile_types)
+    options_config = setup_game()
+    game = MahjongGame(options_config)
     game.run()
 
 if __name__ == '__main__':

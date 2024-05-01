@@ -12,13 +12,14 @@ players_num:int = 4
 positions_seq: list[WindPosition] = [WindPosition.EAST, WindPosition.SOUTH, WindPosition.WEST, WindPosition.NORTH]
 
 class MahjongGame:
-    def __init__(self, tile_types: dict[str, bool]) -> None:
+    def __init__(self, options_config: dict[str, bool]) -> None:
         self.tiles: None | deque[MahjongTile] = None
-        self.tile_types: dict[str, bool] = tile_types
+        self.options_config: dict[str, bool] = options_config
         self.players: list[MahjongPlayer] = [MahjongPlayer(i) for i in range(players_num)]
         self.position_players: None | dict[WindPosition, MahjongPlayer] = None  # map position and player
         self.dealer_position: WindPosition = WindPosition.EAST  # The player at EAST position is the starting dealer
         self.current_position: WindPosition = self.dealer_position  # Current position in game; The starting position is the starting dealer
+        self.joker: None | MahjongTile = None
         self.draw_tile_bool: bool = True
         self.hu_position: WindPosition | None = None
         self.game_over: bool = False
@@ -30,7 +31,7 @@ class MahjongGame:
         Returns:
             list: The initial tiles after shuffle.
         """
-        tiles = shuffle_tiles(self.tile_types)
+        tiles = shuffle_tiles(self.options_config)
         assert len(tiles) % 4 == 0, 'The number of tiles is not divisible by 4.'
         part_tiles_num = len(tiles) // 4
         print('After shuffling:')
@@ -38,7 +39,7 @@ class MahjongGame:
 
         for i, position in enumerate(positions_seq):
             print(f'The tiles at position {position}')
-            for idx, tile in enumerate(tiles[i*part_tiles_num:(i+1)*part_tiles_num]):
+            for idx, tile in enumerate(tiles[i * part_tiles_num : (i + 1) * part_tiles_num]):
                 tile.wall_pos = position
                 tile.wall_idx = idx
                 print(f'Tile {tile.tile_type}{tile.number} is at {tile.wall_idx}')
@@ -117,36 +118,47 @@ class MahjongGame:
         Returns:
             None.
         """
-        tiles = self.build_walls()
-        print(f'before decide starting tiles position, len(tile):{len(tiles)}')
-        print(tiles)
-        part_tiles_num = len(tiles) // 4
-        pos_num, wall_idx = self.decide_initial_draw_position()
-        print(f'pos_num at {pos_num}, wall_idx at {wall_idx}')
-        if pos_num % 4 == 1:
-            pos_start = self.dealer_position
-            pos_num = 0
-        elif pos_num % 4 == 2:
-            pos_start = self.dealer_position + 1
-            pos_num = 1
-        elif pos_num % 4 == 3:
-            pos_start = self.dealer_position + 2
-            pos_num = 2
-        else:
-            pos_start = self.dealer_position + 3
-            pos_num = 3
-        print(f'pos_num at {pos_start}, wall_idx at {wall_idx}')
-        # Skip `wall_idx` stacks in the wall at the given position
-        tiles = tiles[part_tiles_num * pos_num + wall_idx * 2 :] + tiles[0 : part_tiles_num * pos_num + wall_idx * 2]
-        print(f'after decide starting tiles position, len(tile):{len(tiles)}')
-        print(tiles)
-        self.tiles = deque(tiles)
+        if self.position_players and self.options_config:
+            tiles = self.build_walls()
+            print(f'before decide starting tiles position, len(tile):{len(tiles)}')
+            print(tiles)
+            part_tiles_num = len(tiles) // 4
+            pos_num, wall_idx = self.decide_initial_draw_position()
+            print(f'pos_num at {pos_num}, wall_idx at {wall_idx}')
+            if pos_num % 4 == 1:
+                pos_start = self.dealer_position
+                pos_num = 0
+            elif pos_num % 4 == 2:
+                pos_start = self.dealer_position + 1
+                pos_num = 1
+            elif pos_num % 4 == 3:
+                pos_start = self.dealer_position + 2
+                pos_num = 2
+            else:
+                pos_start = self.dealer_position + 3
+                pos_num = 3
+            print(f'pos_num at {pos_start}, wall_idx at {wall_idx}')
+            # Skip `wall_idx` stacks in the wall at the given position
+            tiles = tiles[part_tiles_num * pos_num + wall_idx * 2 :] + tiles[0 : part_tiles_num * pos_num + wall_idx * 2]
+            print(f'after decide starting tiles position, len(tile):{len(tiles)}')
+            print(tiles)
+            self.tiles = deque(tiles)
 
-        for i in range(4):
-            for player in self.players:
-                # draw 1 stack(4 tiles) until all players have 12 tiles
-                # draw one last tile
-                player.draw_tiles(self.tiles, 4) if i !=3 else player.draw_tiles(self.tiles)
+            # draw 13 tiles for every player
+            for i in range(4):
+                for player in self.players:
+                    # draw 1 stack(4 tiles) until all players have 12 tiles
+                    # draw one last tile
+                    player.draw_tiles(self.tiles, 4) if i !=3 else player.draw_tiles(self.tiles)
+            # draw one more tile for dealer to have 14 tiles, and no need for the dealer to draw tile at the beginning of the round with 14 tiles in hand
+            self.position_players[self.dealer_position].draw_tiles(self.tiles)
+            self.draw_tile_bool = False
+
+            # decide joker tile
+            joker_c = self.options_config['joker']
+            if isinstance(joker_c, int):
+                draw_for_joker = self.tiles.popleft()
+                print(f'Draw one more from the wall: {draw_for_joker}. \nThe joker tile in the game: {draw_for_joker + joker_c}')
 
     def decide_initial_draw_position(self) -> tuple[int, int]:
         """
@@ -323,6 +335,7 @@ class MahjongGame:
         """
         self.tiles = None
         self.current_position = self.dealer_position  # Current position in game; The starting position is the starting dealer
+        self.joker = None
         self.draw_tile_bool = True
         self.hu_position =  None
 
