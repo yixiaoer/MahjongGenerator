@@ -62,13 +62,19 @@ def find_chow_tiles(tiles_hold: list[MahjongTile], tile_discard_last: MahjongTil
         tiles_hold += [tile_discard_last]
     tiles_hold = sorted((tile for tile in tiles_hold if tile.tile_type == tile_discard_last.tile_type), key=lambda tile: tile.number)
 
+    # Remove duplicates
+    tiles_unique: list[MahjongTile] = []
+    for tile in tiles_hold:
+        if not tiles_unique or tile.number != tiles_unique[-1].number:
+            tiles_unique.append(tile)
+
     chow_tiles: list[list[MahjongTile]] = []
     if tile_discard_last.tile_type not in ['bamboo', 'characters', 'dots']:
         return chow_tiles
 
-    for i in range(len(tiles_hold) - count + 1):
-        if all(tiles_hold[i + j].number == tiles_hold[i].number + j for j in range(count)):
-            seq = tiles_hold[i:i + count]
+    for i in range(len(tiles_unique) - count + 1):
+        if all(tiles_unique[i + j].number == tiles_unique[i].number + j for j in range(count)):
+            seq = tiles_unique[i:i + count]
             if tile_discard_last in seq:
                 chow_tiles.append(seq)
 
@@ -88,7 +94,7 @@ def remove_pairs_from_list(source_l: list[MahjongTile], target: list[tuple[str, 
     result_l = source_l.copy()
     for item in target:
         if item in result_l:
-            result_l.remove(item)
+            result_l.remove(item)  # type: ignore
     result_l.sort(key=lambda x: f'{x.tile_type}{x.number}')
     return result_l
 
@@ -153,6 +159,11 @@ def test_count_identical_tiles() -> None:
     print(identical_tiles)  # [[bamboo6, bamboo6, bamboo6, bamboo6], [bamboo2, bamboo2, bamboo2, bamboo2]]
 
 def test_find_chow_tiles() -> None:
+    tiles_hold = [MahjongTile('dots',5), MahjongTile('characters', 6), MahjongTile('dots', 4), MahjongTile('dots' ,4)]
+    tile_discard_last = MahjongTile('dots', 3)
+    chow_tiles = find_chow_tiles(tiles_hold, tile_discard_last)
+    print(chow_tiles)  # [[dots3, dots4, dots5]]
+
     tiles_hold = [MahjongTile('characters', 8), MahjongTile('bamboo', 2), MahjongTile('bamboo', 3), MahjongTile('bamboo', 5), MahjongTile('bamboo', 7), MahjongTile('bamboo', 6), MahjongTile('dots', 8)]
     tile_discard_last = MahjongTile('bamboo', 4)
     chow_tiles = find_chow_tiles(tiles_hold, tile_discard_last)

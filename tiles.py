@@ -32,8 +32,8 @@ class MahjongTile:
 
     @staticmethod
     def get_tiles_from_string(tile_str: str) -> MahjongTile:
-        tile_type_name = ''.join([i for i in tile_str if not i.isdigit()])
-        number = int(''.join([i for i in tile_str if i.isdigit()]))
+        tile_type_name = ''.join((i for i in tile_str if not i.isdigit()))
+        number = int(''.join((i for i in tile_str if i.isdigit())))
         return MahjongTile(tile_type_name, number)
 
     def __add__(self, other: Any) -> MahjongTile:
