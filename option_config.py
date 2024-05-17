@@ -24,7 +24,6 @@ def set_options_config(suited: bool = True, honors: bool = True, bonus: bool = F
     }
     return options_config
 
-
 def setup_game() -> dict[str, bool | int]:
     print('Welcome to the Mahjong Game Setup')
 

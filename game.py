@@ -1,7 +1,7 @@
 from collections import deque
 import random
 
-from player import MahjongPlayer
+from player import ActionPlayer, MahjongPlayer, check_chow, check_concealed_kong, check_exposed_kong, check_exposed_kong_from_pong, check_hu_from_discard, check_hu_from_wall, check_pong
 from tiles import MahjongTile, WindPosition, shuffle_tiles
 from utils import input_list, input_yes
 
@@ -45,41 +45,69 @@ class MahjongGame:
                 print(f'Tile {tile.tile_type}{tile.number} is at {tile.wall_idx}')
         return tiles
 
-    def check_current_player(self, current_player: MahjongPlayer) -> None:
-        current_player.check_hu_from_wall()
-        current_player.check_concealed_kong()
-        current_player.check_exposed_kong_from_pong()
-        action = current_player.choose_action()
-        if action in {'hu', 'h'}:
-            self.hu_from_wall()
-        elif action in {'kong', 'k'}:
-            self.kong_from_wall(current_player)
+    def check_current_player(self, current_player: MahjongPlayer, action_choices: dict[WindPosition, ActionPlayer], draw_tile: None | MahjongTile) -> None:
+        cur_pos = self.find_position(current_player)
+        pos_actions = action_choices[cur_pos]
+        pos_actions['player_idx'] = current_player.idx
 
-    def check_other_players(self, current_player: MahjongPlayer, tile_to_discard: MahjongTile) -> None:
-        # no need to process 'skip'
+        # when check hu, the hu_tiles should contain that draw_tile
+        action_hu = check_hu_from_wall(current_player.tiles_hold)
+        print(f'debug hu from draw: action_hu{action_hu}')
+        if action_hu != [] and action_hu and draw_tile:
+            pos_actions['hu'] = {cur_pos: action_hu}  # the value of the key 'hu' is the completed legal hand
+
+        # when check kong, draw_tile can be None
+        action_kong = check_concealed_kong(current_player.tiles_hold)
+        action_kong_from_pong = check_exposed_kong_from_pong(current_player.tiles_hold, current_player.pong)
+        action_kong.extend(action_kong_from_pong)  # type: ignore
+        print(f'debug kong from draw: action_kong{action_kong}')
+
+        if action_kong != [] and action_kong:
+            pos_actions['kong'] = {cur_pos: action_kong}  # type: ignore
+        action = current_player.choose_action(pos_actions)
+        if action in {'hu', 'h'} and draw_tile:
+            self.hu_from_wall(pos_actions, draw_tile)
+        elif action in {'kong', 'k'}:
+            self.kong_from_wall(current_player, pos_actions)
+
+    def check_other_players(self, current_player: MahjongPlayer, tile_to_discard: MahjongTile, action_choices: dict[WindPosition, ActionPlayer]) -> None:
         if isinstance(current_player.position, WindPosition):
-            players_action: dict[str, list] = {'h': [], 'k': [], 'p': [], 'c': []}
+            cur_pos = self.find_position(current_player)
             for player in self.players:
                 if player != current_player:
+                    pos_actions = action_choices[self.find_position(player)]
+                    pos_actions['player_idx'] = player.idx
                     print(f'Player{player.idx} check action options.')
-                    player.check_hu_from_discard(tile_to_discard)
-                    player.check_exposed_kong(tile_to_discard)
-                    player.check_pong(tile_to_discard)
+                    action_hu = check_hu_from_discard(player.tiles_hold, tile_to_discard)
+                    if action_hu != [] and action_hu:
+                        pos_actions['hu'] = {cur_pos: action_hu}  # the value of the key 'hu' is the completed legal hand
+                    kong_tile = check_exposed_kong(player.tiles_hold, tile_to_discard)
+                    if kong_tile:
+                        pos_actions['kong'] = {cur_pos: [kong_tile] * 4}
+                        # also as an action to pong
+                        pos_actions['pong'] = {cur_pos: [kong_tile] * 3}
+                    action_pong = check_pong(player.tiles_hold, tile_to_discard)
+                    if action_pong != [] and action_pong:
+                        pos_actions['pong'] = {cur_pos: action_pong}
                     # Next player, check hu, kong, pong, and chow
                     if player.position == current_player.position + 1:
-                        player.check_chow(tile_to_discard)
-                    action = player.choose_action()
+                        pos_actions['chow'] = check_chow(player.tiles_hold, tile_to_discard)
+                    action = player.choose_action(pos_actions)
+                    print(f'debug action selections: action: {action}, {type(action)}')
                     if action in {'hu', 'h'}:
-                        players_action['h'].append(player.position)
+                        action_choices[self.find_position(player)] = ActionPlayer(player_idx=pos_actions['player_idx'], chow=[], hu=pos_actions['hu'], kong={}, pong={})
                     elif action in {'kong', 'k'}:
-                        players_action['k'].append(player.position)
+                        action_choices[self.find_position(player)] = ActionPlayer(player_idx=pos_actions['player_idx'], chow=[], hu={}, kong=pos_actions['kong'], pong={})
                     elif action in {'pong', 'p'}:
-                        players_action['p'].append(player.position)
+                        action_choices[self.find_position(player)] = ActionPlayer(player_idx=pos_actions['player_idx'], chow=[], hu={}, kong={}, pong=pos_actions['pong'])
                     elif isinstance(action, int):
-                        players_action['c'].append(action)
-            print(players_action)
-            self.decide_other_player_action(current_player.position, players_action, tile_to_discard)
-            self.set_players_bool()
+                        print(f'debug {[pos_actions['chow'][action]]}')
+                        action_choices[self.find_position(player)] = ActionPlayer(player_idx=pos_actions['player_idx'], chow=[pos_actions['chow'][action]], hu={}, kong={}, pong={})
+                    elif action in {'skip', 's', ''}:
+                        action_choices[self.find_position(player)] = ActionPlayer(player_idx=pos_actions['player_idx'], chow=[], hu={}, kong={}, pong={})
+                    print(pos_actions)
+            print(action_choices)
+            self.decide_other_player_action(current_player.position, action_choices, tile_to_discard)
 
     def choose_table_position(self) -> None:
         """
@@ -97,7 +125,7 @@ class MahjongGame:
                 player.position = pos
                 print(f'Player{player.idx} sits at position {pos}')
 
-    def chow(self, player_chow_pos: WindPosition, chow_idx: int, tile: MahjongTile) -> None:
+    def chow(self, player_chow_pos: WindPosition, player_chow_seq: list[list[MahjongTile]], tile: MahjongTile) -> None:
         """
         Chow.
 
@@ -106,7 +134,7 @@ class MahjongGame:
         """
         if self.position_players is not None:
             player_chow = self.position_players[player_chow_pos]
-            player_chow.declare_chow(chow_idx, tile)
+            player_chow.declare_chow(player_chow_seq, tile)
             self.draw_tile_bool = False
             self.current_position = player_chow_pos
 
@@ -144,9 +172,11 @@ class MahjongGame:
             print(tiles)
             self.tiles = deque(tiles)
 
-            # draw 13 tiles for every player
+            # draw 13 tiles for every player, 4 * (4 -1 ) + 1 = 13
             for i in range(4):
-                for player in self.players:
+                # decide the position to draw tiles
+                for idx_pos in range(players_num):
+                    player = self.position_players[self.current_position + idx_pos]
                     # draw 1 stack(4 tiles) until all players have 12 tiles
                     # draw one last tile
                     player.draw_tiles(self.tiles, 4) if i !=3 else player.draw_tiles(self.tiles)
@@ -156,9 +186,13 @@ class MahjongGame:
 
             # decide joker tile
             joker_c = self.options_config['joker']
-            if isinstance(joker_c, int):
+            # if joker_c is bool, both isinstance(joker_c, int) and isinstance(joker_c, bool) are True
+            # Here if joker_c is bool and False, the game doesn't use joker tile.
+            if joker_c and isinstance(joker_c, int):
                 draw_for_joker = self.tiles.popleft()
                 print(f'Draw one more from the wall: {draw_for_joker}. \nThe joker tile in the game: {draw_for_joker + joker_c}')
+
+            input_yes(f'Start game? (yes, default): ')
 
     def decide_initial_draw_position(self) -> tuple[int, int]:
         """
@@ -173,27 +207,31 @@ class MahjongGame:
         pos_num, wall_idx = sum(dice_rolls), min(dice_rolls)
         return pos_num, wall_idx
 
-    def decide_other_player_action(self, current_player_pos: WindPosition, players_action: dict[str, list[WindPosition]], tile: MahjongTile) -> None:
-        if len(players_action['h']) > 0:
-            player_hu_pos_relative = min(current_player_pos - pos for pos in players_action['h'])
-            player_hu_pos = current_player_pos + player_hu_pos_relative
-            self.hu_from_discard(player_hu_pos, current_player_pos, tile)
-        elif len(players_action['k']) > 0:
+    def decide_other_player_action(self, current_player_pos: WindPosition, action_choices: dict[WindPosition, ActionPlayer], tile: MahjongTile) -> None:
+        player_chow_seq = None
+        player_kong_pos = None
+        player_pong_pos = None
+
+        for i in range(1, players_num):
+            if action_choices[current_player_pos + i]['hu'] != {}:
+                # Hu takes the highest priority; if multiple players can Hu, the player closest to the dealer takes precedence
+                self.hu_from_discard(action_choices[current_player_pos + i]['hu'], current_player_pos + i, current_player_pos, tile)
+            if action_choices[current_player_pos + i]['kong'] != {} and player_kong_pos == None:
+                player_kong_pos = current_player_pos + i
+            if action_choices[current_player_pos + i]['pong'] != {} and player_pong_pos == None:
+                player_pong_pos = current_player_pos + i
+            if action_choices[current_player_pos + i]['chow'] != []:
+                player_chow_seq = action_choices[current_player_pos + i]['chow']
+
+        # priority: kong/pong > chow
+        if player_kong_pos:
             # at most 1 player can appear in the list
-            player_kong_pos_relative = current_player_pos - players_action['k'][0] 
-            player_kong_pos = current_player_pos + player_kong_pos_relative
             self.exposed_kong(player_kong_pos, tile)
-        elif len(players_action['p']) > 0:
+        elif player_pong_pos:
             # at most 1 player can appear in the list
-            player_pong_pos_relative = current_player_pos - players_action['p'][0] 
-            player_pong_pos = current_player_pos + player_pong_pos_relative
             self.pong(player_pong_pos, tile)
-        elif len(players_action['c']) > 0:
-            # at most 1 player can appear in the list, and only can be the next(pos + 1) player
-            # the `action` in list should be chow index
-            chow_idx = players_action['c'][0]
-            if isinstance(chow_idx, int):
-                self.chow(current_player_pos + 1, chow_idx, tile)
+        elif player_chow_seq:
+            self.chow(current_player_pos + 1, player_chow_seq, tile)
 
     def decide_players_position(self, dice_rolls_players: list[int]) -> None:
         """
@@ -244,20 +282,22 @@ class MahjongGame:
                     return pos
         return NotImplemented
 
-    def hu_from_discard(self, player_hu_pos: WindPosition, current_player_pos: WindPosition, tile: MahjongTile):
+    def hu_from_discard(self, hu_tiles: dict[WindPosition, list[list[MahjongTile]]],  player_hu_pos: WindPosition, current_player_pos: WindPosition, tile: MahjongTile):
         if self.position_players is not None:
             player_hu = self.position_players[player_hu_pos]
-            player_hu.call_hu_from_discard(tile, self.position_players[current_player_pos].idx)
+            player_hu.call_hu_from_discard(hu_tiles, tile, self.position_players[current_player_pos].idx)
             self.hu_position = player_hu_pos
 
-    def hu_from_wall(self) -> None:
+    def hu_from_wall(self, pos_actions: ActionPlayer, tile: MahjongTile) -> None:
         if self.position_players is not None:
+            print(f'debug hu from wall, pos_actions:{pos_actions}')
             player_hu = self.position_players[self.current_position]
-            player_hu.call_hu_from_wall()
+            player_hu.call_hu_from_wall(pos_actions['hu'], tile)
             self.hu_position = self.current_position
 
-    def kong_from_wall(self, current_player: MahjongPlayer) -> None:
-        kong_seqs = current_player.action_kong_bool
+    def kong_from_wall(self, current_player: MahjongPlayer, pos_actions: ActionPlayer) -> None:
+        print(f'debug kong from wall, pos_actions:{pos_actions}')
+        kong_seqs = pos_actions['kong'][self.current_position]
         if isinstance(kong_seqs, list) and isinstance(self.tiles, deque):
             print(f'Self kong: {kong_seqs}')
             kong_idx = input_list(f'Which seq to kong: {' '.join(f'{i}.{kong_seqs[i]}' for i in range(len(kong_seqs)))}?(Only input number) ', [f'{i}' for i in range(len(kong_seqs))], 'Invalid Kong seq.')
@@ -300,15 +340,18 @@ class MahjongGame:
         self.start_game()
         tile_to_discard = None
         while self.tiles and len(self.tiles) > 0 and self.position_players is not None and not self.game_over:
+            draw_tile: None | MahjongTile = None
             current_player = self.position_players[self.current_position]
             if self.draw_tile_bool:
-                current_player.draw_tiles(self.tiles)
+                draw_tile = current_player.draw_tiles(self.tiles)
             current_player.tiles_hold.sort(key=lambda x: f'{x.tile_type}{x.number}')
+            print('==================================================================')
             print(f'Position {self.current_position}: Player {current_player.idx}\'s hand: {current_player.tiles_hold}')
-            self.check_current_player(current_player)
+            action_choices = self.reset_players_actions()
+            self.check_current_player(current_player, action_choices, draw_tile)
             self.draw_tile_bool = True
 
-            if self.tiles:
+            if self.tiles and self.hu_position is None:
                 tiles_check = [f'{tile.tile_type}{tile.number}'for tile in current_player.tiles_hold]
                 discard_tile = input_list(f'For Player{current_player.idx} Choose a tile to discard (e.g., bamboo5): ', tiles_check, 'Please enter the existing tile in your hand.')
                 tile_to_discard = MahjongTile.get_tiles_from_string(discard_tile)
@@ -316,7 +359,7 @@ class MahjongGame:
                 current_player.discard_tile(tile_to_discard)
                 print(f'Player{current_player.idx} discards {discard_tile}')
                 # Every time one player discard one tile, must check other players
-                self.check_other_players(current_player, tile_to_discard)
+                self.check_other_players(current_player, tile_to_discard, action_choices)
                 if self.draw_tile_bool:
                     self.next_player()
 
@@ -324,7 +367,14 @@ class MahjongGame:
                 self.next_dealer()
                 print(f'Finish one round!')
                 print(f'The dealer for the new round is Player{self.position_players[self.dealer_position].idx} at {self.dealer_position}')
-                self.set_new_round()
+                if input_yes(f'Start next round? (yes, default): '):
+                    self.set_new_round()
+
+            if len(self.tiles) == 0:
+                print(f'Draw: No Winner.')
+                print(f'Start another new round with Player{self.position_players[self.dealer_position].idx} at {self.dealer_position} as dealer')
+                if input_yes(f'Start next round? (yes, default): '):
+                    self.set_new_round()
 
     def set_new_round(self) -> None:
         """
@@ -342,27 +392,10 @@ class MahjongGame:
         for player in self.players:
             player.tiles_hold = []
             player.tiles_discard = []
-            player.hu_bool = False
-            player.action_kong_bool = False
-            player.action_pong_bool = False
-            player.action_chow_bool = False
             player.pong = []
             player.kong = []
             player.chow = []
         self.deal_starting_tiles()
-
-    def set_players_bool(self) -> None:
-        """
-        Set the variables for checking hu, kong, pong, and chow to default values.
-
-        Returns:
-            None.
-        """
-        for player in self.players:
-            player.hu_bool = False
-            player.action_kong_bool = False
-            player.action_pong_bool = False
-            player.action_chow_bool = False
 
     def start_game(self) -> None:
         """
@@ -374,3 +407,6 @@ class MahjongGame:
         if self.position_players is None:
             self.determine_first_dealer()
         self.deal_starting_tiles()
+
+    def reset_players_actions(self) -> dict[WindPosition, ActionPlayer]:
+        return {pos: ActionPlayer(player_idx=-1, chow=[], hu={}, kong={}, pong={}) for pos in positions_seq}

@@ -48,6 +48,8 @@ To better represent the various rules in Mahjong Generator, we represent the rul
 
 * Build walls: 码牌, Every player takes N / 4 tiles (N is the total number of tiles)  and places them in a wall, 2 tiles high and N / 8 tiles long, at their position.
 
+* Draw tile(s): 摸牌, draw tile(s) from the wall.
+
 * Dealer: 庄家.
 
 * Tile types.
@@ -70,7 +72,7 @@ To better represent the various rules in Mahjong Generator, we represent the rul
 
         - Flowers: 花牌, include plum blossom(also 梅), orchid(also 兰), chrysanthemum(also 菊), bamboo(also 竹).
 
-        - Seasons: 季牌, include spring(also 春), summer(also 夏), autumn(also 秋), winter(also 冬).
+        - Seasons: 季牌, include spring(also 春), summer(also 夏), autumn(also 秋), and winter(also 冬).
 
 * Joker: 混牌(also wildcard, wild card, 百搭, 癞子, 赖子, 鬼牌, 财神), can be used to represent any other tile needed to complete a sequence(meld or pair).
 
@@ -100,7 +102,9 @@ To better represent the various rules in Mahjong Generator, we represent the rul
 
     * Special hands: can be different in variants as some exceptions.
 
-* Ready hand: 听(also 听牌, 叫糊), the hand is one tile short of winning
+* Ready hand: 听(also 听牌, 叫糊), the hand is one tile short of winning.
+
+* Draw 流局(also, 荒庄), no tiles are left in the wall, and no player has won this round.
 
 ## Some special legal hands
 

@@ -2,9 +2,9 @@ from collections import Counter
 
 from tiles import MahjongTile
 
-def check_legal_hand(tiles: list[MahjongTile]) -> bool | list[list[MahjongTile]]:
+def check_legal_hand(tiles: list[MahjongTile]) -> list[list[MahjongTile]]:
     if len(tiles) % 3 != 2:
-        return False
+        return []
 
     tiles_tuple = tuple(sorted((tile.tile_type, tile.number) for tile in tiles))
     tiles_counts = Counter(tiles_tuple)
@@ -49,7 +49,7 @@ def check_legal_hand(tiles: list[MahjongTile]) -> bool | list[list[MahjongTile]]
 
     legal_hand_bool = try_melds_pair()
     if not legal_hand_bool:
-        return False
+        return []
     melds = remove_pairs_from_list(tiles, pair)
     return [melds, [MahjongTile(*pair[0])] * 2]
 
@@ -104,9 +104,9 @@ def test_check_legal_hand() -> None:
             # Melds: (bamboo1, bamboo2, bamboo3); (dots9, dots9, dots9).
             # Pair: bamboo2, bamboo2.
             [
-                MahjongTile("bamboo", 1), MahjongTile("bamboo", 2), MahjongTile("bamboo", 3),
-                MahjongTile("bamboo", 2), MahjongTile("bamboo", 2),
-                MahjongTile("dots", 9), MahjongTile("dots", 9), MahjongTile("dots", 9),
+                MahjongTile('bamboo', 1), MahjongTile('bamboo', 2), MahjongTile('bamboo', 3),
+                MahjongTile('bamboo', 2), MahjongTile('bamboo', 2),
+                MahjongTile('dots', 9), MahjongTile('dots', 9), MahjongTile('dots', 9),
             ],
             # Melds: (bamboo1, bamboo1, bamboo1); (bamboo2, bamboo3, bamboo4); (bamboo3, bamboo4, bamboo5); (bamboo3, bamboo4, bamboo5).
             # Pair: bamboo2, bamboo2.
@@ -120,21 +120,21 @@ def test_check_legal_hand() -> None:
             # Melds: (bamboo3, bamboo3, bamboo3); (characters5, characters5, characters5); (dots9, dots9, dots9).
             # Pair: bamboo2, bamboo2.
             [
-                MahjongTile("bamboo", 2), MahjongTile("bamboo", 2),
-                MahjongTile("bamboo", 3), MahjongTile("bamboo", 3), MahjongTile("bamboo", 3),
-                MahjongTile("characters", 5), MahjongTile("characters", 5), MahjongTile("characters", 5),
-                MahjongTile("dots", 9), MahjongTile("dots", 9),  MahjongTile("dots", 9)],
+                MahjongTile('bamboo', 2), MahjongTile('bamboo', 2),
+                MahjongTile('bamboo', 3), MahjongTile('bamboo', 3), MahjongTile('bamboo', 3),
+                MahjongTile('characters', 5), MahjongTile('characters', 5), MahjongTile('characters', 5),
+                MahjongTile('dots', 9), MahjongTile('dots', 9),  MahjongTile('dots', 9)],
             # Only Pairs
             [
-                MahjongTile("bamboo", 2), MahjongTile("bamboo", 2)
+                MahjongTile('bamboo', 2), MahjongTile('bamboo', 2)
             ],
             # Melds: (bamboo2, bamboo3,bamboo4); (bamboo3, bamboo3, bamboo3); (bamboo4, bamboo5, bamboo6).
             # Pair: bamboo4, bamboo4.
             [
-                MahjongTile("bamboo", 4), MahjongTile("bamboo", 4),
-                MahjongTile("bamboo", 3), MahjongTile("bamboo", 3), MahjongTile("bamboo", 3), 
-                MahjongTile("bamboo", 2), MahjongTile("bamboo", 3), MahjongTile("bamboo", 4),
-                MahjongTile("bamboo", 4), MahjongTile("bamboo", 5),  MahjongTile("bamboo", 6),
+                MahjongTile('bamboo', 4), MahjongTile('bamboo', 4),
+                MahjongTile('bamboo', 3), MahjongTile('bamboo', 3), MahjongTile('bamboo', 3), 
+                MahjongTile('bamboo', 2), MahjongTile('bamboo', 3), MahjongTile('bamboo', 4),
+                MahjongTile('bamboo', 4), MahjongTile('bamboo', 5),  MahjongTile('bamboo', 6),
             ],
             # 4 same tiles in 2 chow seqs and 1 pair
             # Melds: (bamboo1, bamboo2, bamboo3); (bamboo2, bamboo3, bamboo4); (bamboo4, bamboo5, bamboo6); (bamboo8, bamboo8, bamboo8).

@@ -1,8 +1,16 @@
 from collections import deque
+from typing import TypedDict
 
 from basic_rules import check_legal_hand, count_identical_tiles, find_chow_tiles, find_identical_tiles, find_tiles_in_tiles
 from tiles import MahjongTile, WindPosition
 from utils import input_player_action
+
+class ActionPlayer(TypedDict):
+    player_idx: int  # -1 when setup
+    chow: list[list[MahjongTile]]
+    hu: dict[WindPosition, list[list[MahjongTile]]]
+    kong: dict[WindPosition, MahjongTile | list[MahjongTile | list[MahjongTile]]]
+    pong: dict[WindPosition, list[MahjongTile]]
 
 class MahjongPlayer:
     def __init__(self, idx: int) -> None:
@@ -11,118 +19,56 @@ class MahjongPlayer:
         self.tiles_discard: list[MahjongTile] = []
         self.position: None | WindPosition = None
         self.is_dealer: bool = False
-        self.hu_bool: bool | list[list[MahjongTile]] = False
         # if check other players, it can only be one tiles_seq, so it's the only one `list[MahjongTile]``
         # if check self, it can be a tiles_seq of concealed kong `list[MahjongTile]`, or one element `MahjongTile` for kong from pong.
-        self.action_kong_bool: bool | list[MahjongTile | list[MahjongTile]] = False
-        self.action_pong_bool: bool | list[MahjongTile] = False
-        self.action_chow_bool: bool | list[list[MahjongTile]] = False
         # contain some declared melds
         self.pong: list[list[MahjongTile]] = []
         self.kong: list[list[MahjongTile]] = []
         self.chow: list[list[MahjongTile]] = []
 
-    def call_hu_from_discard(self, tile: MahjongTile, other_player_idx: int) -> None:
-        if isinstance(self.hu_bool, list):
-            print(f'Player{self.idx} Call Hu {self.hu_bool} from discard tile {tile}. Hu!')
-            print(f'The discard tile is from Player{other_player_idx}.')
+    def call_hu_from_discard(self, hu_tiles: dict[WindPosition, list[list[MahjongTile]]], tile: MahjongTile, other_player_idx: int) -> None:
+        print(f'Player{self.idx} Call Hu {hu_tiles} from discard tile {tile}. Hu!')
+        print(f'The discard tile is from Player{other_player_idx}.')
 
-    def call_hu_from_wall(self) -> None:
-        if isinstance(self.hu_bool, list):
-            print(f'Player{self.idx} Call Self-draw Hu {self.hu_bool}. Hu!')
+    def call_hu_from_wall(self, hu_tiles: dict[WindPosition, list[list[MahjongTile]]], tile: MahjongTile) -> None:
+        print(f'Player{self.idx} Call Self-draw Hu {hu_tiles} with {tile} from wall. Hu!')
 
-    def check_chow(self, tile: MahjongTile) -> None:
-        check_chow_contain = False
-        if tile in self.tiles_hold:
-            check_chow_contain = True
-
-        chow_tiles = find_chow_tiles(self.tiles_hold, tile)
-        if len(chow_tiles) > 0:
-            self.action_chow_bool = chow_tiles
-        else:
-            self.action_chow_bool = False
-
-        if not check_chow_contain: 
-            self.tiles_hold.remove(tile)
-
-    def check_concealed_kong(self) -> None:
-        kong_seqs = count_identical_tiles(self.tiles_hold)
-        if len(kong_seqs) > 0:
-            self.action_kong_bool = kong_seqs
-
-    def check_exposed_kong(self, tile: MahjongTile) -> None:
-        if find_identical_tiles(self.tiles_hold, tile) == 4:
-            self.action_kong_bool = [tile] * 4
-            self.action_pong_bool = [tile] * 3
-        else:
-            self.action_kong_bool = False
-
-    def check_exposed_kong_from_pong(self) -> None:
-        if len(self.pong) > 0:
-            declare_pong_tiles = [tiles[0] for tiles in self.pong]
-            kong_from_pong_seqs = list(find_tiles_in_tiles(self.tiles_hold, declare_pong_tiles))
-            if isinstance(self.action_kong_bool, list):
-                self.action_kong_bool.extend(kong_from_pong_seqs)
-                print(f'Can exposed_kong_from_pong in: {kong_from_pong_seqs}')
-            else:
-                self.action_kong_bool = kong_from_pong_seqs
-
-    def check_hu_from_discard(self, tile_discard: None | MahjongTile = None) -> None:
-        # check tiles held in hand (usually after draw tiles) when tile_discard is None
-        # check tiles held in hand and with discarded one tile when tile_discard is not None
-        check_tiles = self.tiles_hold.copy() if tile_discard is None else self.tiles_hold.copy() + [tile_discard]
-        legal_hand = check_legal_hand(check_tiles)
-        if isinstance(legal_hand, list):
-            self.hu_bool = legal_hand
-        else:
-            self.hu_bool = False
-
-    def check_hu_from_wall(self) -> None:
-        legal_hand = check_legal_hand(self.tiles_hold)
-        if isinstance(legal_hand, list):
-            self.hu_bool = legal_hand
-            print('Can self-hu from wall')
-            print(legal_hand)
-        else:
-            self.hu_bool = False
-
-    def check_pong(self, tile: MahjongTile) -> None:
-        if find_identical_tiles(self.tiles_hold, tile) == 3:
-            self.action_pong_bool = [tile] * 3
-        else:
-            self.action_pong_bool = False
-
-    def choose_action(self) -> None | int | str:
-        hu_bool = True if self.hu_bool else False
-        kong_bool = True if self.action_kong_bool else False
-        pong_bool = True if self.action_pong_bool else False
-        chow_bool = True if self.action_chow_bool else False
+    def choose_action(self, pos_actions: ActionPlayer) -> None | int | str:
+        print(pos_actions)
+        hu_bool = False if pos_actions['hu'] == None or list(pos_actions['hu'].values()) in ([], [[]]) else True
+        kong_bool = False if pos_actions['kong'] == None or list(pos_actions['kong'].values()) in ([], [[]]) else True
+        pong_bool = False if pos_actions['pong'] == None or list(pos_actions['pong'].values()) in ([], [[]]) else True
+        chow_bool = False if pos_actions['chow'] in (None, [], [[]]) else True
+        print(f'hu_bool: {hu_bool}')
+        print(f'kong_bool: {kong_bool}')
+        print(f'pong_bool: {pong_bool}')
+        print(f'chow_bool: {chow_bool}')
         if not (hu_bool or kong_bool or pong_bool or chow_bool):
             # if can not choose any action
             return None
-        return input_player_action(hu_bool, kong_bool, pong_bool, chow_bool, self.action_chow_bool)
+        return input_player_action(hu_bool, kong_bool, pong_bool, chow_bool, pos_actions['chow'])
 
-    def declare_chow(self, chow_idx: int, tile: MahjongTile) -> None:
+    def declare_chow(self, player_chow_seq: list[list[MahjongTile]], tile: MahjongTile) -> None:
         """
         This play declare Chow. The chow seq move, from hand `self.tiles_hold` and discard tile, to declared `self.chow` list.
 
         Returns:
             list: None.
         """
-        if isinstance(self.action_chow_bool, list):
-            tiles_seq = self.action_chow_bool[chow_idx]
-            print(f'Player{self.idx} Declare Chow {tiles_seq}')
+        print(f'debug chow: player_chow_seq{player_chow_seq}')
+        tiles_seq = player_chow_seq[0]
+        print(f'Player{self.idx} Declare Chow {tiles_seq}')
 
-            for tile_chow in tiles_seq:
-                if tile_chow != tile:
-                    self.tiles_hold.remove(tile_chow)
-                    self.tiles_discard.append(tile_chow)
+        for tile_chow in tiles_seq:
+            if tile_chow != tile:
+                self.tiles_hold.remove(tile_chow)
+                self.tiles_discard.append(tile_chow)
 
-            self.chow.append(tiles_seq)
-            print(f'Current declared chow: {self.chow}')
+        self.chow.append(tiles_seq)
+        print(f'Current declared chow: {self.chow}')
 
     def declare_concealed_kong(self, tiles: deque[MahjongTile], kong_seq: list[MahjongTile]) -> None:
-        # In Mahjang game, the Concealed Kong tile should not be shown to others. Here print the kong seq for debugging.
+        # In Mahjong game, the Concealed Kong tile should not be shown to others. Here print the kong seq for debugging.
         print(f'Player{self.idx} Concealed Kong {kong_seq}.')
         for _ in range(4):
             self.tiles_hold.remove(kong_seq[0])
@@ -138,7 +84,7 @@ class MahjongPlayer:
     def declare_exposed_kong(self, tiles: deque[MahjongTile], tile: MahjongTile) -> None:
         tiles_seq = [tile] * 4
         print(f'Player{self.idx} Declare Exposed Kong {tiles_seq}')
-        for _ in range(2):
+        for _ in range(3):
             self.tiles_hold.remove(tile)
             self.tiles_discard.append(tile)
 
@@ -180,10 +126,73 @@ class MahjongPlayer:
         self.tiles_hold.remove(tile)
         self.tiles_discard.append(tile)
 
-    def draw_tiles(self, tiles: deque[MahjongTile], draw_num: int = 1) -> None:
+    def draw_tiles(self, tiles: deque[MahjongTile], draw_num: int = 1) -> MahjongTile:
         for _ in range(draw_num):
             if len(tiles) > 0:
                 draw_tile = tiles.popleft()
                 print(f'Player{self.idx} draws {draw_tile}')
                 self.tiles_hold.append(draw_tile)
         print(f'Player{self.idx} holds {self.tiles_hold}')
+        return draw_tile
+
+def check_chow(tiles_hold: list[MahjongTile], tile: MahjongTile) -> list[list[MahjongTile]]:
+    is_chow_contain = False
+    if tile in tiles_hold:
+        is_chow_contain = True
+
+    chow_tiles = find_chow_tiles(tiles_hold, tile)
+    if not is_chow_contain: 
+        tiles_hold.remove(tile)
+
+    print(f'debug chow, tiles_hold: {tiles_hold}, tile: {tile}, check_chow_tiles:{chow_tiles}')
+
+    if len(chow_tiles) == 0:
+        return []
+    return chow_tiles
+
+def check_concealed_kong(tiles_hold: list[MahjongTile]) -> list[list[MahjongTile]]:
+    kong_seqs = count_identical_tiles(tiles_hold)
+
+    print(f'debug check_concealed_kong, tiles_hold: {tiles_hold}, check_kong_tiles:{kong_seqs}')
+
+    if len(kong_seqs) == 0:
+        return []
+    return kong_seqs
+
+def check_exposed_kong(tiles_hold: list[MahjongTile], tile: MahjongTile) -> None | MahjongTile:
+    print(f'--------------check_exposed_kong tiles_hold:{tiles_hold}, tile: {tile}, {find_identical_tiles(tiles_hold, tile)}')
+    if find_identical_tiles(tiles_hold, tile) == 4:
+        print(f'debug check_exposed_kong, tiles_hold: {tiles_hold}, check_kong_tiles:{tile}')
+        return tile
+    return None
+
+def check_exposed_kong_from_pong(tiles_hold: list[MahjongTile], pong: list[list[MahjongTile]]) -> list[MahjongTile]:
+    if len(pong) == 0:
+        return []
+    declare_pong_tiles = [tiles[0] for tiles in pong]
+    kong_from_pong_seqs = list(find_tiles_in_tiles(tiles_hold, declare_pong_tiles))
+    if len(kong_from_pong_seqs) == 0:
+        return []
+    print(f'Can exposed kong from pong in: {kong_from_pong_seqs}')
+    return kong_from_pong_seqs
+
+def check_hu_from_discard(tiles_hold: list[MahjongTile], tile_discard: None | MahjongTile = None) -> list[list[MahjongTile]]:
+    # check tiles held in hand (usually after draw tiles) when tile_discard is None
+    # check tiles held in hand and with discarded one tile when tile_discard is not None
+    check_tiles = tiles_hold.copy() if tile_discard is None else tiles_hold.copy() + [tile_discard]
+    # if complete legal hand, legal_hand is list[list[MahjongTile]], else []
+    legal_hand = check_legal_hand(check_tiles)
+    return legal_hand
+
+def check_hu_from_wall(tiles_hold: list[MahjongTile]) -> list[list[MahjongTile]]:
+    legal_hand = check_legal_hand(tiles_hold)
+    if len(legal_hand) > 0:
+        print(f'Can self-hu from wall: {legal_hand}')
+    return legal_hand
+
+def check_pong(tiles_hold: list[MahjongTile], tile: MahjongTile) -> list[MahjongTile]:
+    print(f'====================tiles_hold:{tiles_hold}, tile: {tile}, {find_identical_tiles(tiles_hold, tile)}')
+    if find_identical_tiles(tiles_hold, tile) == 3:
+        print(f'debug check_pong, tiles_hold: {tiles_hold}, check_pong_tiles:{tile}')
+        return [tile] * 3
+    return []
